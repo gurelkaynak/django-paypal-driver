@@ -74,22 +74,34 @@ class PayPal(object):
             "SIGNATURE": signature or getattr(
                 settings, "PAYPAL_SIGNATURE", None
             ),
-            "VERSION": "53.0",
+            "VERSION": "124.0",
         }
+
+        self.IN_CONTEXT = getattr(settings, "PAYPAL_IN_CONTEXT", False)
 
         # Second step is to set the API end point and redirect urls correctly.
         if getattr(settings, "PAYPAL_DEBUG", False):
             self.NVP_API_ENDPOINT = "https://api-3t.sandbox.paypal.com/nvp"
-            self.PAYPAL_REDIRECT_URL = (
-                "https://www.sandbox.paypal.com/cgi-bin/webscr?"
-                "cmd=_express-checkout&token="
-            )
+            if not self.IN_CONTEXT:
+                self.PAYPAL_REDIRECT_URL = (
+                    "https://www.sandbox.paypal.com/cgi-bin/webscr?"
+                    "cmd=_express-checkout&token="
+                )
+            else:
+                self.PAYPAL_REDIRECT_URL = (
+                    "https://www.sandbox.paypal.com/checkoutnow?useraction=commit&token="
+                )
         else:
             self.NVP_API_ENDPOINT = "https://api-3t.paypal.com/nvp"
-            self.PAYPAL_REDIRECT_URL = (
-                "https://www.paypal.com/cgi-bin/webscr?"
-                "cmd=_express-checkout&token="
-            )
+            if not self.IN_CONTEXT: 
+                self.PAYPAL_REDIRECT_URL = (
+                    "https://www.paypal.com/cgi-bin/webscr?"
+                    "cmd=_express-checkout&token="
+                )
+            else:
+                self.PAYPAL_REDIRECT_URL = (
+                    "https://www.paypal.com/checkoutnow?useraction=commit&token="
+                )
 
         # initialization
         self.signature = urllib.urlencode(self.credientials) + '&'
@@ -102,6 +114,7 @@ class PayPal(object):
         self.token = None
         self.response = None
         self.refund_response = None
+        self.transaction_id = None
 
     def _get_value_from_qs(self, qs, value):
         """
@@ -126,6 +139,9 @@ class PayPal(object):
         if not token:
             return None
         return self.PAYPAL_REDIRECT_URL + token
+
+    def GetTransactionId(self):
+        return self.transaction_id
 
     def SetExpressCheckout(
         self,
@@ -290,6 +306,8 @@ class PayPal(object):
                 response_tokens, "L_LONGMESSAGE0"
             )
             return False
+
+        self.transaction_id = self._get_value_from_qs(response_tokens, 'TRANSACTIONID')
         return True
 
     def DoCapture(
